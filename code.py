@@ -1,68 +1,51 @@
-import json
-
 import requests
+import json
+import logging
+from telegram.ext import Updater, CommandHandler
 
-import telegram
+# Set up logging
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
 
-from telegram.ext import CommandHandler, Updater
+logger = logging.getLogger(__name__)
 
-API_KEY = '45fc9fc9cdd6fd6cef98e98872aadf02'
+# Define the shorten function
+def shorten(update, context):
+    # Get the URL to shorten from the command arguments
+    args = context.args
+    if len(args) == 0:
+        update.message.reply_text('Please provide a URL to shorten.')
+        return
+    url = args[0]
 
-def shorten_url(update, context):
+    # Call the Recut API to shorten the URL
+    api_key = '45fc9fc9cdd6fd6cef98e98872aadf02'
+    api_url = 'https://app.recut.in/api/url/add'
+    headers = {'Authorization': f'Bearer {api_key}'}
+    data = {'url': url}
+    response = requests.post(api_url, headers=headers, data=data)
 
-    chat_id = update.message.chat_id
-
-    message_id = update.message.message_id
-
-    url = context.args[0]
-
-    headers = {'Authorization': f'Token {API_KEY}'}
-
-    response = requests.post('https://app.recut.in/api/url/add', json={'url': url}, headers=headers)
-
+    # Check the response status code and parse the JSON response
     if response.status_code == 200:
-
-        response_json = response.json()
-
-        short_url = response_json['short_url']
-
-        context.bot.send_message(chat_id=chat_id, text=short_url, reply_to_message_id=message_id)
-
+        result = json.loads(response.text)
+        shortened_url = result.get('short_url')
+        update.message.reply_text(json.dumps({'short_url': shortened_url}))
     else:
+        update.message.reply_text(json.dumps({'error': 'Failed to shorten URL.'}))
 
-        response_json = None
+# Define the main function to start the bot
+def main():
+    # Set up the Telegram bot and start listening for commands
+    updater = Updater(token='5975097909:AAFn-28gX-Ftg23BVrybmxuT2fSgGNKN8yo', use_context=True)
+    dispatcher = updater.dispatcher
+    dispatcher.add_handler(CommandHandler('shorten', shorten))
+    updater.start_polling()
 
-        if response.content:
+    # Log that the bot has started
+    logger.info("Bot started.")
 
-            try:
+    # Keep the bot running until it is stopped manually
+    updater.idle()
 
-                response_json = response.json()
-
-            except json.JSONDecodeError:
-
-                pass
-
-        error_message = f"An error occurred while shortening the URL. Status code: {response.status_code}"
-
-        if response_json and response_json.get('detail'):
-
-            error_message += f", detail: {response_json['detail']}"
-
-        context.bot.send_message(chat_id=chat_id, text=error_message)
-
-    if response_json:
-
-        # Format the response as JSON for debugging purposes
-
-        response_json_formatted = json.dumps(response_json, indent=2)
-
-        context.bot.send_message(chat_id=chat_id, text=f"API response:\n{response_json_formatted}")
-
-updater = Updater(token='5975097909:AAFn-28gX-Ftg23BVrybmxuT2fSgGNKN8yo', use_context=True)
-
-dispatcher = updater.dispatcher
-
-dispatcher.add_handler(CommandHandler('shorten', shorten_url))
-
-updater.start_polling()
-
+if __name__ == '__main__':
+    main()
